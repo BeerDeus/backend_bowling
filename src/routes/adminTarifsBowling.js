@@ -45,16 +45,18 @@ function validerPayload(body, { partiel } = { partiel: false }) {
     }
   }
 
-  // Comparaison lexicographique valide sur un format "HH:MM" zéro-paddé (cf.
-  // commentaire schema.prisma) - ne gère pas les plages à cheval sur minuit
-  // (ex: 22:00 -> 02:00), pas demandé pour l'instant. Limite connue en PATCH
-  // partiel : si un seul des deux horaires est modifié, on ne le compare
-  // qu'à l'autre valeur DU MÊME payload (pas à la valeur existante en base) -
-  // app-admin envoie toujours les deux horaires ensemble (cf.
-  // ParametresBowlingTarifs.jsx), donc pas un problème en pratique pour
-  // l'instant, mais à garder en tête si un futur appelant ne le fait pas.
-  if (donnees.heureDebut && donnees.heureFin && donnees.heureDebut >= donnees.heureFin) {
-    erreurs.push("heure_fin_doit_suivre_heure_debut");
+  // heureFin PEUT être < heureDebut : ça signifie que la plage traverse
+  // minuit (ex: 17:00 -> 02:00, cf. Beer 2026-07-19 "on ferme après minuit")
+  // - cf. tarificationBowling.js pour la logique de résolution qui gère ce
+  // cas. Seule l'égalité stricte est rejetée (plage de durée nulle, ou
+  // ambiguë - "toute la journée" doit être exprimé explicitement en
+  // 00:00 -> 23:59, pas en 00:00 -> 00:00). Limite connue en PATCH partiel :
+  // si un seul des deux horaires est modifié, on ne compare qu'aux valeurs
+  // DU MÊME payload (pas à la valeur existante en base) - app-admin envoie
+  // toujours les deux horaires ensemble (cf. ParametresBowlingTarifs.jsx),
+  // donc pas un problème en pratique pour l'instant.
+  if (donnees.heureDebut && donnees.heureFin && donnees.heureDebut === donnees.heureFin) {
+    erreurs.push("heure_fin_doit_differer_heure_debut");
   }
 
   if (!partiel || body.jours !== undefined) {

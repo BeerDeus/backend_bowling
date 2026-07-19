@@ -76,11 +76,21 @@ async function run() {
   }
 
   {
+    // heureFin < heureDebut = plage à cheval sur minuit, AUTORISÉE (cf. Beer
+    // 2026-07-19 "on ferme après minuit") - voir tarificationBowling.js pour
+    // la logique de résolution qui gère ce cas.
     const res = fakeRes();
-    await creer({ body: { label: "X", heureDebut: "18:00", heureFin: "10:00", jours: [1], prixParPartieCentimes: 500 } }, res);
+    await creer({ body: { label: "Soirée", heureDebut: "17:00", heureFin: "02:00", jours: [5], prixParPartieCentimes: 700 } }, res);
+    assert.strictEqual(res.statusCode, 201);
+    console.log("OK: plage à cheval sur minuit (17:00 -> 02:00) -> 201, autorisée");
+  }
+
+  {
+    const res = fakeRes();
+    await creer({ body: { label: "X", heureDebut: "18:00", heureFin: "18:00", jours: [1], prixParPartieCentimes: 500 } }, res);
     assert.strictEqual(res.statusCode, 400);
-    assert.ok(res.body.details.includes("heure_fin_doit_suivre_heure_debut"));
-    console.log("OK: heureFin avant heureDebut -> 400");
+    assert.ok(res.body.details.includes("heure_fin_doit_differer_heure_debut"));
+    console.log("OK: heureFin === heureDebut -> 400 (plage ambiguë)");
   }
 
   {
@@ -103,8 +113,8 @@ async function run() {
     const res = fakeRes();
     await lister({}, res);
     assert.strictEqual(res.statusCode, 200);
-    assert.strictEqual(res.body.length, 2);
-    console.log("OK: liste -> 2 plages");
+    assert.strictEqual(res.body.length, 3);
+    console.log("OK: liste -> 3 plages");
   }
 
   {
@@ -133,8 +143,8 @@ async function run() {
   {
     const res = fakeRes();
     await lister({}, res);
-    assert.strictEqual(res.body.length, 1);
-    console.log("OK: liste après suppression -> 1 plage restante");
+    assert.strictEqual(res.body.length, 2);
+    console.log("OK: liste après suppression -> 2 plages restantes");
   }
 
   {

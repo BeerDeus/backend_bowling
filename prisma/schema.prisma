@@ -188,12 +188,22 @@ model PlageTarifaireBowling {
   // les complications de fuseau horaire/format round-trip avec Prisma pour
   // un besoin aussi simple (une comparaison lexicographique de chaînes
   // "HH:MM" suffit pour trier/comparer des horaires).
+  //
+  // Convention (question Beer 2026-07-19, cf. tarificationBowling.js) :
+  // heureDebut INCLUSIVE, heureFin EXCLUSIVE. Deux plages qui s'enchaînent se
+  // configurent donc avec la MÊME heure ronde des deux côtés (13:00-17:00
+  // puis 17:00-02:00), pas besoin de "16:59". heureFin peut être < heureDebut
+  // pour une plage à cheval sur minuit (ex: 17:00 -> 02:00, "on ferme après
+  // minuit") - géré par estPlageActive() dans tarificationBowling.js.
   heureDebut String
   heureFin   String
 
-  // Jours concernés par cette plage, convention JS Date.getDay() (0=dimanche
+  // Jour(s) de DÉBUT de cette plage, convention JS Date.getDay() (0=dimanche
   // ... 6=samedi) pour rester directement comparable à `new Date().getDay()`
-  // côté backend/frontend sans table de correspondance. Tous les jours par défaut.
+  // côté backend/frontend sans table de correspondance. Tous les jours par
+  // défaut. Pour une plage à cheval sur minuit, désigne le jour où la plage
+  // COMMENCE (ex: jours=[5] + 23:00->02:00 = vendredi 23h -> samedi 2h, PAS
+  // samedi 23h -> dimanche 2h).
   jours Int[] @default([0, 1, 2, 3, 4, 5, 6])
 
   prixParPartieCentimes Int
