@@ -21,6 +21,7 @@ const { Server } = require("socket.io");
 
 const catalogueRouter = require("./src/routes/catalogue");
 const commandesRouter = require("./src/routes/commandes");
+const santeRouter = require("./src/routes/sante");
 
 const app = express();
 const server = http.createServer(app);
@@ -47,6 +48,7 @@ app.get("/", (req, res) => {
 });
 
 // --- Phase 2 : API REST catalogue + commandes bar ---
+app.use("/api", santeRouter);
 app.use("/api", catalogueRouter);
 app.use("/api", commandesRouter(io));
 

@@ -35,6 +35,25 @@ transaction TPE est valide"). Elle est appliquée :
 - **côté BDD** via la migration `prisma/migrations/20260719140000_add_check_payee_transaction/`
   (déjà écrite - `npx prisma migrate deploy` l'applique en plus de `init`).
 
+## Diagnostic BDD (`/api/sante`)
+
+Ajouté suite à un incident (2026-07-19) : `/api/categories` chargeait indéfiniment sur
+Hostinger (sans erreur) alors que tout marchait en local avec la même `DATABASE_URL`.
+Hypothèse la plus probable : Hostinger (hébergement mutualisé) filtre/bloque les
+connexions TCP sortantes vers un port de BDD externe comme 5432, ce qui fait rester la
+requête bloquée indéfiniment (pas d'erreur, pas de timeout par défaut côté Postgres/Prisma).
+
+`GET /api/sante` fait un `SELECT 1` borné à 5s (au lieu de dépendre uniquement du
+`connect_timeout` de l'URL) et renvoie soit `{ok:true}`, soit une erreur claire en 503 -
+sert à distinguer rapidement "la BDD ne répond pas" d'un autre problème. Toujours garder
+`connect_timeout=10` dans `DATABASE_URL` (voir `.env.example`) pour que les vraies routes
+échouent proprement plutôt que de pendre indéfiniment.
+
+Si `/api/sante` confirme que la BDD est injoignable depuis Hostinger, la solution standard
+est de passer par le driver HTTP de Neon (`@neondatabase/serverless` + `@prisma/adapter-neon`,
+qui interroge la BDD via HTTPS au lieu d'une connexion TCP brute sur 5432 - contourne ce
+genre de restriction réseau). Pas encore implémenté : à faire si le diagnostic le confirme.
+
 ## Trivec (mock)
 
 Pas d'accès à l'API/sandbox Trivec à ce jour. `src/trivec/client.js` expose une
