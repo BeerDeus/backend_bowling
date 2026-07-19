@@ -169,3 +169,43 @@ model CommandeJoueurBowling {
 
   @@map("commande_joueurs_bowling")
 }
+
+// --------------------------------------------------------------------------
+// Paramètres Bowling - tarification par plage horaire (cf. demande Beer
+// 2026-07-19 : "paramètres de tarification pour le bowling... qui changent
+// selon l'heure"). Prépare le terrain pour un futur calcul de prix réel
+// (Phase 3 - paiement non simulé) : POUR L'INSTANT ce modèle n'est PAS
+// branché sur la création de commande Bowling (routes/bowlingCommandes.js
+// force toujours totalCentimes=0, paiement simulé) ni sur le choix du tarif
+// Conqueror (bot/conqueror_bot.py utilise toujours le tarif "1" en dur) -
+// uniquement de la configuration côté Back-Office pour l'instant, à câbler
+// ensuite une fois la Phase 3 démarrée.
+model PlageTarifaireBowling {
+  id    String @id @default(cuid())
+  label String
+
+  // "HH:MM" (24h), stocké en texte plutôt qu'un vrai type SQL Time : évite
+  // les complications de fuseau horaire/format round-trip avec Prisma pour
+  // un besoin aussi simple (une comparaison lexicographique de chaînes
+  // "HH:MM" suffit pour trier/comparer des horaires).
+  heureDebut String
+  heureFin   String
+
+  // Jours concernés par cette plage, convention JS Date.getDay() (0=dimanche
+  // ... 6=samedi) pour rester directement comparable à `new Date().getDay()`
+  // côté backend/frontend sans table de correspondance. Tous les jours par défaut.
+  jours Int[] @default([0, 1, 2, 3, 4, 5, 6])
+
+  prixParPartieCentimes Int
+
+  // Priorité en cas de chevauchement de deux plages actives au même instant
+  // (la plus petite valeur gagne) - laissé à l'appréciation de Beer plutôt
+  // que de bloquer la création sur un chevauchement détecté automatiquement.
+  ordre Int @default(0)
+
+  actif  Boolean  @default(true)
+  creeLe DateTime @default(now())
+  majLe  DateTime @updatedAt
+
+  @@map("plages_tarifaires_bowling")
+}

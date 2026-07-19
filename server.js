@@ -26,6 +26,8 @@ const catalogueRouter = require("./src/routes/catalogue");
 const commandesRouter = require("./src/routes/commandes");
 const bowlingCommandesRouter = require("./src/routes/bowlingCommandes");
 const adminCommandesRouter = require("./src/routes/adminCommandes");
+const adminStatutRouter = require("./src/routes/adminStatut");
+const adminTarifsBowlingRouter = require("./src/routes/adminTarifsBowling");
 
 const app = express();
 const server = http.createServer(app);
@@ -64,6 +66,8 @@ app.use("/api", catalogueRouter);
 app.use("/api", commandesRouter(io));
 app.use("/api", bowlingCommandesRouter(botRelay));
 app.use("/api", adminCommandesRouter);
+app.use("/api", adminStatutRouter(botRelay));
+app.use("/api", adminTarifsBowlingRouter);
 
 // Filet de sécurité : une erreur dans une route async (ex: BDD injoignable)
 // ne doit JAMAIS faire planter tout le process (ce qui coupe aussi le canal

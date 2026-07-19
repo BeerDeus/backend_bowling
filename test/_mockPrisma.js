@@ -10,7 +10,9 @@ function creerPrismaMock() {
     { id: "p3", nom: "Inactif", prixCentimes: 999, categorieId: "cat1", actif: false, codeTrivec: null },
   ];
   const commandes = new Map();
+  const tarifsBowling = new Map();
   let autoId = 1;
+  let autoIdTarif = 1;
   const compteurs = {};
 
   const prisma = {
@@ -83,6 +85,42 @@ function creerPrismaMock() {
           if (where?.statut && c.statut !== where.statut) return false;
           return true;
         }).length;
+      },
+    },
+    // Ajouté pour test/adminTarifsBowling.logique.test.js - implémentation
+    // minimale (pas de vrai tri multi-clés, juste ce dont ce test a besoin).
+    plageTarifaireBowling: {
+      create: async ({ data }) => {
+        const id = "t" + autoIdTarif++;
+        const tarif = { id, ordre: 0, actif: true, creeLe: new Date(), majLe: new Date(), ...data };
+        tarifsBowling.set(id, tarif);
+        return tarif;
+      },
+      update: async ({ where, data }) => {
+        const tarif = tarifsBowling.get(where.id);
+        if (!tarif) throw new Error("introuvable");
+        Object.assign(tarif, data, { majLe: new Date() });
+        return tarif;
+      },
+      delete: async ({ where }) => {
+        const tarif = tarifsBowling.get(where.id);
+        if (!tarif) throw new Error("introuvable");
+        tarifsBowling.delete(where.id);
+        return tarif;
+      },
+      findMany: async ({ orderBy } = {}) => {
+        let liste = Array.from(tarifsBowling.values());
+        const cles = Array.isArray(orderBy) ? orderBy : orderBy ? [orderBy] : [];
+        for (const cle of cles.slice().reverse()) {
+          const [champ] = Object.keys(cle);
+          const sens = cle[champ];
+          liste = liste.slice().sort((a, b) => {
+            if (a[champ] < b[champ]) return sens === "asc" ? -1 : 1;
+            if (a[champ] > b[champ]) return sens === "asc" ? 1 : -1;
+            return 0;
+          });
+        }
+        return liste;
       },
     },
     // Simule uniquement le pattern utilisé par numeroCommande.js (tagged

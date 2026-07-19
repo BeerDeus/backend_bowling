@@ -4,15 +4,9 @@
 // dépendent du connect_timeout de DATABASE_URL - ceinture + bretelles ici).
 const express = require("express");
 const { prisma } = require("../db");
+const { avecDelaiMax } = require("../avecDelaiMax");
 
 const router = express.Router();
-
-function avecDelaiMax(promesse, delaiMs, messageTimeout) {
-  return Promise.race([
-    promesse,
-    new Promise((_, reject) => setTimeout(() => reject(new Error(messageTimeout)), delaiMs)),
-  ]);
-}
 
 // GET /api/sante - ping BDD borné à 5s, pour diagnostiquer un problème réseau
 // (ex: connexion sortante vers la BDD bloquée par l'hébergeur) sans laisser
