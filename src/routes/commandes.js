@@ -4,6 +4,7 @@ const express = require("express");
 const { prisma } = require("../db");
 const { getTrivecClient } = require("../trivec/client");
 const { asyncHandler } = require("../asyncHandler");
+const { genererNumero } = require("../numeroCommande");
 
 const INCLUDE_LIGNES = { lignes: { include: { produit: true } } };
 
@@ -51,8 +52,12 @@ module.exports = function commandesRouter(io) {
       0
     );
 
+    const numero = await genererNumero("BAR");
+
     let commande = await prisma.commande.create({
       data: {
+        numero,
+        module: "BAR",
         borneId: borneId || null,
         totalCentimes,
         lignes: { create: lignesACreer },

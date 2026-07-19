@@ -1,64 +1,20 @@
-// Test logique métier des routes commandes, SANS base de données réelle.
-// ---------------------------------------------------------------------------
-// Pourquoi un mock plutôt qu'une vraie Postgres ici : ce test sert de
-// vérification rapide (calcul du total serveur, validations, contrainte
-// PAYEE, statut après échec Trivec) exécutable partout (CI, poste sans
-// Postgres). Il remplace "../db" par un mock en mémoire via Module._load -
-// un vrai test d'intégration (Postgres réelle) reste à ajouter une fois une
-// instance dispo (cf. Roadmap Phase 2 - "tests d'intégration").
+// Test logique métier des routes commandes Bar, SANS base de données réelle.
+// Remplace "../db" (routes/*.js) ET "./db" (numeroCommande.js) par un mock en
+// mémoire (cf. test/_mockPrisma.js) via Module._load - un vrai test
+// d'intégration (Postgres réelle) reste à ajouter séparément.
 //
 // Lancer : node test/commandes.logique.test.js (depuis backend/)
 const assert = require("assert");
 const path = require("path");
 const Module = require("module");
+const { creerPrismaMock } = require("./_mockPrisma");
 
-const categories = [{ id: "cat1", nom: "Softs", ordre: 1 }];
-const produits = [
-  { id: "p1", nom: "Coca", prixCentimes: 350, categorieId: "cat1", actif: true, codeTrivec: null },
-  { id: "p2", nom: "Bière", prixCentimes: 450, categorieId: "cat1", actif: true, codeTrivec: null },
-  { id: "p3", nom: "Inactif", prixCentimes: 999, categorieId: "cat1", actif: false, codeTrivec: null },
-];
-let commandes = new Map();
-let autoId = 1;
-
-const prismaMock = {
-  categorie: { findMany: async () => categories },
-  produit: {
-    findMany: async ({ where }) => produits.filter((p) => {
-      if (where.actif !== undefined && p.actif !== where.actif) return false;
-      if (where.id && !where.id.in.includes(p.id)) return false;
-      if (where.categorieId && p.categorieId !== where.categorieId) return false;
-      return true;
-    }),
-  },
-  commande: {
-    create: async ({ data }) => {
-      const id = "c" + autoId++;
-      const lignes = data.lignes.create.map((l, i) => ({
-        id: "l" + i, commandeId: id, ...l,
-        produit: produits.find((p) => p.id === l.produitId),
-      }));
-      const commande = {
-        id, statut: "EN_COURS", borneId: data.borneId, totalCentimes: data.totalCentimes,
-        transactionTpeId: null, moyenPaiement: null, ticketTrivecId: null, erreur: null, lignes,
-      };
-      commandes.set(id, commande);
-      return commande;
-    },
-    update: async ({ where, data }) => {
-      const commande = commandes.get(where.id);
-      if (!commande) throw new Error("introuvable");
-      Object.assign(commande, data);
-      return commande;
-    },
-    findUnique: async ({ where }) => commandes.get(where.id) || null,
-  },
-};
+const { prisma: prismaMock } = creerPrismaMock();
 
 const dbPath = path.join(__dirname, "..", "src", "db.js");
 const originalLoad = Module._load;
 Module._load = function (request, parent, isMain) {
-  if (parent && request === "../db") {
+  if (parent && (request === "../db" || request === "./db")) {
     try {
       if (Module._resolveFilename(request, parent) === dbPath) return { prisma: prismaMock };
     } catch (_e) { /* laisse passer, résolution normale */ }
@@ -117,9 +73,19 @@ async function run() {
     assert.strictEqual(res.body.totalCentimes, 1150);
     assert.strictEqual(res.body.statut, "ENVOYEE_BAR");
     assert.ok(res.body.ticketTrivecId);
+    assert.strictEqual(res.body.module, "BAR");
+    assert.match(res.body.numero, /^BA\d{3}$/);
     assert.ok(events.some(([n]) => n === "commande_maj"));
-    console.log("OK: commande nominale -> total=1150, statut=ENVOYEE_BAR");
+    console.log(`OK: commande nominale -> total=1150, statut=ENVOYEE_BAR, numero=${res.body.numero}`);
     commandeId = res.body.id;
+  }
+
+  {
+    const res = fakeRes();
+    await postCommandes({ body: { lignes: [{ produitId: "p1", quantite: 1 }] } }, res);
+    assert.match(res.body.numero, /^BA\d{3}$/);
+    assert.notStrictEqual(res.body.numero, commandeId);
+    console.log(`OK: 2e commande -> numero différent et incrémenté (${res.body.numero})`);
   }
 
   {
@@ -162,7 +128,7 @@ async function run() {
     delete process.env.TRIVEC_MOCK_ECHEC;
   }
 
-  console.log("\nTous les tests logique métier (mock Prisma) sont passés.");
+  console.log("\nTous les tests logique métier commandes Bar (mock Prisma) sont passés.");
 }
 
 run().catch((exc) => {

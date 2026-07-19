@@ -67,31 +67,70 @@ model Produit {
 }
 
 // --------------------------------------------------------------------------
-// Commandes Bar
+// Commandes (multi-modules, cf. CDC 3 - "Prise de Commande Multi-Modules")
 // --------------------------------------------------------------------------
 enum StatutCommande {
-  EN_COURS      // panier en construction côté borne, pas encore validé
-  ENVOYEE_BAR   // envoyée à Trivec (impression ticket), en attente de paiement si non payé au comptant borne
+  EN_COURS      // en construction côté borne, pas encore validée
+  ENVOYEE_BAR   // (Bar) envoyée à Trivec (impression ticket), en attente de paiement si non payé au comptant borne
   PAYEE         // paiement confirmé (transactionTpeId obligatoire, cf. contrainte ci-dessous)
-  ECHOUEE       // échec technique (Trivec injoignable, impression échouée...)
+  ECHOUEE       // échec technique (Trivec injoignable, bot Conqueror en échec...)
   ANNULEE       // annulée (client parti sans payer, timeout, action staff)
 }
 
+enum ModuleCommande {
+  BOWLING
+  BAR
+  KARAOKE
+  QUIZ
+}
+
+// Compteur atomique par module, pour générer les identifiants humains
+// (BO001, BA001, KA001...) - cf. Commande.numero. Une seule ligne par
+// module, incrémentée via une requête SQL atomique (UPSERT), jamais lue puis
+// réécrite en deux temps côté application (éviterait une course entre deux
+// commandes créées au même instant sur deux bornes différentes).
+model CompteurModule {
+  module        ModuleCommande @id
+  dernierNumero Int            @default(0)
+
+  @@map("compteurs_module")
+}
+
 model Commande {
-  id                String         @id @default(cuid())
-  statut            StatutCommande @default(EN_COURS)
-  totalCentimes     Int
-  borneId           String?
+  id     String  @id @default(cuid())
+  // Identifiant humain par module (BO001, BA001, KA001...), cf. CompteurModule.
+  // Nullable : les quelques commandes de test créées avant l'introduction de
+  // ce champ n'en ont pas (pas de backfill, données de test sans conséquence).
+  numero String? @unique
+  module ModuleCommande @default(BAR) // défaut BAR : toutes les commandes créées avant ce champ étaient des commandes Bar
+
+  statut        StatutCommande @default(EN_COURS)
+  totalCentimes Int            @default(0) // 0 pour Bowling tant que le paiement est simulé (Phase 3 pas encore faite)
+  borneId       String?
   // Jamais de données carte brutes ici (CDC 2.3/5) : uniquement le statut/ID
   // renvoyé par le TPE une fois la transaction traitée nativement par lui.
-  transactionTpeId  String?
-  moyenPaiement     String?        // "carte" | "especes" | "ce" | ... - libre pour l'instant, à contraindre en Phase 3
-  ticketTrivecId    String?        // identifiant renvoyé par l'adaptateur Trivec (mock ou réel)
-  erreur            String?        // dernier message d'erreur technique (Trivec injoignable, etc.)
-  creeLe            DateTime       @default(now())
-  majLe             DateTime       @updatedAt
+  transactionTpeId String?
+  moyenPaiement     String?  // "carte" | "especes" | "ce" | "simule" (Bowling, en attendant la Phase 3)... libre pour l'instant
+  ticketTrivecId    String?  // (Bar) identifiant renvoyé par l'adaptateur Trivec (mock ou réel)
+  erreur            String?  // dernier message d'erreur technique (Trivec injoignable, etc.)
 
-  lignes CommandeLigne[]
+  // Conditions générales de vente (encart affiché avant paiement, cf. Phase 4 app)
+  cgvAccepteesLe DateTime?
+  // QR/Pass CE saisi par le client - encart présent dès maintenant mais PAS
+  // ENCORE validé (pas de vérification d'unicité/anti-fraude) : cf. Roadmap
+  // Phase 4 (Pass CE - contrainte d'unicité en base contre le scan simultané).
+  codeAvantageSaisi String?
+
+  // Résultat du bot Conqueror (Bowling) - cf. src/botRelay.js
+  botSucces Boolean?
+  botErreur String?
+  botPiste  Int?
+
+  creeLe DateTime @default(now())
+  majLe  DateTime @updatedAt
+
+  lignes  CommandeLigne[]          // utilisé uniquement pour module=BAR
+  joueurs CommandeJoueurBowling[]  // utilisé uniquement pour module=BOWLING
 
   @@map("commandes")
 }
@@ -109,4 +148,24 @@ model CommandeLigne {
   creeLe               DateTime @default(now())
 
   @@map("commande_lignes")
+}
+
+// --------------------------------------------------------------------------
+// Commandes Bowling
+// --------------------------------------------------------------------------
+model CommandeJoueurBowling {
+  id         String   @id @default(cuid())
+  commandeId String
+  commande   Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  prenom     String
+  bumpers    Boolean  @default(false)
+  // Nombre de parties pour CE joueur - actuellement identique pour tous les
+  // joueurs d'une même commande (l'app ne demande qu'un nombre de parties
+  // global, cf. Roadmap Phase 4), gardé par joueur pour rester compatible
+  // avec le bot (qui, lui, sait déjà gérer un nombre différent par joueur -
+  // cf. bot/conqueror_bot.py - si on affine l'app plus tard).
+  parties    Int      @default(1)
+  creeLe     DateTime @default(now())
+
+  @@map("commande_joueurs_bowling")
 }

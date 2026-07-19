@@ -1,4 +1,4 @@
-# Backend (Phase 1 + Phase 2)
+# Backend (Phase 1 + Phase 2 + Phase 4 Bowling)
 
 ## Installation
 
@@ -54,6 +54,28 @@ est de passer par le driver HTTP de Neon (`@neondatabase/serverless` + `@prisma/
 qui interroge la BDD via HTTPS au lieu d'une connexion TCP brute sur 5432 - contourne ce
 genre de restriction réseau). Pas encore implémenté : à faire si le diagnostic le confirme.
 
+## Mise à jour de schéma (2026-07-19) - modules commande + numérotation
+
+Ajout du parcours client Bowling complet (wizard) + identifiant humain par module
+(BO001, BA001...). Après avoir tiré ces fichiers :
+
+```
+cd backend
+npm install
+npx prisma generate
+npx prisma migrate dev --name ajout_bowling_module_numero
+```
+
+Nouveautés côté schéma : `Commande.numero`/`module` (généré via `CompteurModule`, cf.
+`src/numeroCommande.js`), `Commande.cgvAccepteesLe`/`codeAvantageSaisi`/`botSucces`/
+`botErreur`/`botPiste`, nouveau modèle `CommandeJoueurBowling`. Les commandes de test déjà
+en base gardent `numero = null` (pas de backfill, sans conséquence).
+
+Nouvelle route : `POST /api/commandes-bowling` (crée la commande, simule le paiement -
+toujours un succès tant que la Phase 3/TPE n'est pas branchée - puis relaie au bot
+Conqueror via `src/botRelay.js`, réutilisé aussi par le canal socket direct historique).
+Testé via mock : `node test/bowlingCommandes.logique.test.js`.
+
 ## Trivec (mock)
 
 Pas d'accès à l'API/sandbox Trivec à ce jour. `src/trivec/client.js` expose une
@@ -66,9 +88,11 @@ force un échec simulé, utile pour tester le cas d'erreur.
 
 ```
 node test/commandes.logique.test.js
+node test/bowlingCommandes.logique.test.js
 ```
-Test logique métier (calcul du total serveur, validations, contrainte PAYEE, échec
-Trivec) via un mock Prisma en mémoire - pas besoin d'une vraie Postgres pour ce test.
+Tests logique métier (calcul du total serveur, validations, contrainte PAYEE, échec
+Trivec, numérotation par module, paiement simulé, échec bot) via un mock Prisma en
+mémoire (cf. `test/_mockPrisma.js`) - pas besoin d'une vraie Postgres pour ces tests.
 Un vrai test d'intégration (Postgres réelle) reste à écrire une fois une instance dispo.
 
 ## Incidents résolus (2026-07-19)
