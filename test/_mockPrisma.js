@@ -62,6 +62,28 @@ function creerPrismaMock() {
         return commande;
       },
       findUnique: async ({ where }) => commandes.get(where.id) || null,
+      // Ajoutés pour test/adminCommandes.logique.test.js (liste Back-Office) -
+      // implémentation minimale (pas de vrai skip/take paginé sur un vrai
+      // moteur, juste ce qu'il faut pour valider le filtrage + la pagination
+      // en mémoire).
+      findMany: async ({ where, orderBy, skip = 0, take } = {}) => {
+        let liste = Array.from(commandes.values()).filter((c) => {
+          if (where?.module && c.module !== where.module) return false;
+          if (where?.statut && c.statut !== where.statut) return false;
+          return true;
+        });
+        if (orderBy?.creeLe === "desc") {
+          liste = liste.slice().reverse();
+        }
+        return liste.slice(skip, take ? skip + take : undefined);
+      },
+      count: async ({ where } = {}) => {
+        return Array.from(commandes.values()).filter((c) => {
+          if (where?.module && c.module !== where.module) return false;
+          if (where?.statut && c.statut !== where.statut) return false;
+          return true;
+        }).length;
+      },
     },
     // Simule uniquement le pattern utilisé par numeroCommande.js (tagged
     // template : le premier paramètre interpolé est le module).
