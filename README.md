@@ -32,12 +32,8 @@ Le schéma Prisma ne peut pas exprimer nativement une contrainte CHECK condition
 transaction TPE est valide"). Elle est appliquée :
 - **côté application** dans `src/routes/commandes.js` (PATCH `/commandes/:id/statut` refuse
   `PAYEE` sans `transactionTpeId`, testé dans `test/commandes.logique.test.js`) ;
-- **à ajouter côté BDD** après la première vraie migration : éditer le fichier SQL généré
-  dans `prisma/migrations/.../migration.sql` pour y ajouter :
-  ```sql
-  ALTER TABLE "commandes" ADD CONSTRAINT statut_payee_transaction_check
-    CHECK (statut <> 'PAYEE' OR "transactionTpeId" IS NOT NULL);
-  ```
+- **côté BDD** via la migration `prisma/migrations/20260719140000_add_check_payee_transaction/`
+  (déjà écrite - `npx prisma migrate deploy` l'applique en plus de `init`).
 
 ## Trivec (mock)
 
@@ -56,11 +52,25 @@ Test logique métier (calcul du total serveur, validations, contrainte PAYEE, é
 Trivec) via un mock Prisma en mémoire - pas besoin d'une vraie Postgres pour ce test.
 Un vrai test d'intégration (Postgres réelle) reste à écrire une fois une instance dispo.
 
-## Vérifié dans cette session (2026-07-19)
+## Incidents résolus (2026-07-19)
 
-`prisma validate`/`generate` n'ont pas pu être exécutés dans l'environnement de
-développement utilisé pour écrire ce code (le domaine `binaries.prisma.sh`, qui sert les
-binaires d'engine Prisma, y était bloqué par la sandbox réseau - 403 Forbidden). Le schéma
-a été relu manuellement et la logique métier des routes est testée (`test/`), mais lance
-`npx prisma generate` sur ta machine (réseau normal) avant de considérer la Phase 2 comme
-définitivement validée.
+- **Prisma 7 incompatible** : `^7.8.0` (résolu automatiquement par npm) a cassé `migrate`
+  (`url` dans `datasource` plus supporté sans `prisma.config.ts` + adaptateur). Figé sur
+  `5.22.0` (exact, pas de `^`) dans `package.json` - stable, compatible avec le schéma tel
+  quel.
+- **DATABASE_URL non chargé au runtime** : la CLI Prisma (`generate`/`migrate`) lit `.env`
+  automatiquement, mais `node server.js` non - sans `dotenv`, le process crashait dès le
+  `require` (avant même `app.listen()`), d'où "Failed to fetch" en local et 503 en boucle
+  sur Hostinger. Fix : `require("dotenv").config()` en toute première ligne de
+  `server.js`. Si l'hébergeur injecte déjà `DATABASE_URL` comme vraie variable d'env de la
+  plateforme, `dotenv` ne l'écrase pas (sans risque).
+- **Crash total sur une erreur de route** : les handlers async d'Express 4 ne remontent pas
+  automatiquement une erreur (contrairement à Express 5) - une requête Prisma qui échoue
+  partait en unhandled rejection, qui tue tout le process Node par défaut (coupant au passage
+  le canal WebSocket bot Conqueror). Fix : `src/asyncHandler.js` (wrapper appliqué à toutes
+  les routes) + middleware d'erreur global dans `server.js` (500 propre au lieu d'un crash).
+
+`prisma validate`/`generate` n'ont pas pu être exécutés dans le sandbox utilisé pour écrire
+ce code (le domaine `binaries.prisma.sh` y était bloqué - 403 Forbidden) ; la logique métier
+est testée via mock (`test/`). Confirmé fonctionnel côté Beer : `migrate dev --name init` a
+créé les tables sur la vraie instance Neon.

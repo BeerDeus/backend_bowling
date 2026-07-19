@@ -3,6 +3,18 @@
 // (Phase 1, inchangé), et exposer l'API REST catalogue/commandes bar
 // (Phase 2, cf. Roadmap).
 
+// IMPORTANT : doit être la toute première ligne exécutée. Contrairement à la
+// CLI Prisma (generate/migrate), qui lit .env automatiquement, `node
+// server.js` ne charge PAS .env tout seul - sans ça, DATABASE_URL est
+// indéfini au runtime même si .env existe et contient la bonne valeur (ça a
+// cassé le déploiement du 2026-07-19 : PrismaClient() plantait dès le
+// require, donc AVANT même app.listen() -> tout le serveur crashait,
+// "Failed to fetch" en local / 503 en boucle sur Hostinger). Si Hostinger (ou
+// un autre hébergeur) injecte DATABASE_URL comme vraie variable d'env de la
+// plateforme, dotenv ne l'écrase pas (il ne complète que ce qui manque) :
+// cette ligne est donc sans risque dans tous les cas.
+require("dotenv").config();
+
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -37,6 +49,17 @@ app.get("/", (req, res) => {
 // --- Phase 2 : API REST catalogue + commandes bar ---
 app.use("/api", catalogueRouter);
 app.use("/api", commandesRouter(io));
+
+// Filet de sécurité : une erreur dans une route async (ex: BDD injoignable)
+// ne doit JAMAIS faire planter tout le process (ce qui coupe aussi le canal
+// bot Conqueror, cf. Phase 1) - juste renvoyer un 500 propre pour CETTE
+// requête. Les routes catalogue/commandes appellent next(err) via
+// asyncHandler (cf. src/asyncHandler.js) pour arriver ici.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error("[erreur]", err);
+  res.status(500).json({ erreur: "erreur_serveur", message: err.message });
+});
 
 io.on("connection", (socket) => {
   console.log(`[connexion] client ${socket.id}`);
@@ -110,6 +133,20 @@ setInterval(() => {
     botSocket = null;
   }
 }, 5000);
+
+// Filet de sécurité de dernier recours (ex: erreur dans un handler socket.io,
+// pas couvert par le middleware d'erreur Express ci-dessus) : on logue au
+// lieu de laisser Node tuer tout le process par défaut (cf. incident du
+// 2026-07-19 - DATABASE_URL manquant crashait tout le serveur, coupant du
+// même coup le canal bot Conqueror). Ne remplace pas un vrai try/catch
+// localisé, mais évite qu'une erreur isolée mette toute la borne hors
+// service.
+process.on("unhandledRejection", (raison) => {
+  console.error("[ALERTE][unhandledRejection]", raison);
+});
+process.on("uncaughtException", (erreur) => {
+  console.error("[ALERTE][uncaughtException]", erreur);
+});
 
 server.listen(PORT, () => {
   console.log(`Serveur backend démarré sur http://localhost:${PORT}`);

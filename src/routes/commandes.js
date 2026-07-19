@@ -3,6 +3,7 @@
 const express = require("express");
 const { prisma } = require("../db");
 const { getTrivecClient } = require("../trivec/client");
+const { asyncHandler } = require("../asyncHandler");
 
 const INCLUDE_LIGNES = { lignes: { include: { produit: true } } };
 
@@ -15,7 +16,7 @@ module.exports = function commandesRouter(io) {
   // POST /api/commandes - crée une commande à partir du panier de la borne,
   // puis la transmet à Trivec (mock pour l'instant, cf. src/trivec/client.js).
   // Body attendu : { borneId?, lignes: [{ produitId, quantite }] }
-  router.post("/commandes", async (req, res) => {
+  router.post("/commandes", asyncHandler(async (req, res) => {
     const { borneId, lignes } = req.body || {};
 
     if (!Array.isArray(lignes) || lignes.length === 0) {
@@ -82,22 +83,22 @@ module.exports = function commandesRouter(io) {
 
     io.emit("commande_maj", commande);
     res.status(commande.statut === "ECHOUEE" ? 502 : 201).json(commande);
-  });
+  }));
 
   // GET /api/commandes/:id
-  router.get("/commandes/:id", async (req, res) => {
+  router.get("/commandes/:id", asyncHandler(async (req, res) => {
     const commande = await prisma.commande.findUnique({
       where: { id: req.params.id },
       include: INCLUDE_LIGNES,
     });
     if (!commande) return res.status(404).json({ erreur: "commande_introuvable" });
     res.json(commande);
-  });
+  }));
 
   // PATCH /api/commandes/:id/statut - changement manuel de statut (staff /
   // futur module paiement Phase 3). Miroir applicatif de la contrainte DB
   // (cf. migration) : impossible de passer en PAYEE sans transactionTpeId.
-  router.patch("/commandes/:id/statut", async (req, res) => {
+  router.patch("/commandes/:id/statut", asyncHandler(async (req, res) => {
     const { statut, transactionTpeId, moyenPaiement } = req.body || {};
     const statutsValides = ["EN_COURS", "ENVOYEE_BAR", "PAYEE", "ECHOUEE", "ANNULEE"];
     if (!statutsValides.includes(statut)) {
@@ -118,7 +119,7 @@ module.exports = function commandesRouter(io) {
     } catch (exc) {
       res.status(404).json({ erreur: "commande_introuvable" });
     }
-  });
+  }));
 
   return router;
 };
