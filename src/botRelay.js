@@ -2,20 +2,33 @@
 // à la fois par le canal socket direct (tests manuels, cf. app-borne
 // Bowling.jsx "debug") et par les routes REST qui orchestrent un flux complet
 // côté serveur (ex: POST /api/commandes-bowling, cf. Roadmap Phase 4).
-// Comportement inchangé par rapport à la Phase 1 (même heartbeat, même
-// timeout de 8s sur l'acquittement) - juste réorganisé.
 function creerBotRelay(io) {
   let botSocket = null;
   let botLastHeartbeat = null;
   const HEARTBEAT_TIMEOUT_MS = 10_000;
 
+  // Incident du 2026-07-19 : timeout fixe à 8s hérité du PoC Phase 1 (calibré
+  // sur "créer une piste sans configurer personne"), beaucoup trop court une
+  // fois le bot capable de renommer chaque joueur + choisir son tarif/parties
+  // (cf. bot/conqueror_bot.py - plusieurs secondes par joueur, dialogues +
+  // fenêtres PDV successives). Résultat observé : le bot finit réellement le
+  // travail dans Conqueror, mais l'acquittement socket arrive après le
+  // timeout -> le serveur enregistre "timeout_bot" alors que la partie a bien
+  // été créée. Le budget est donc maintenant calculé selon le nombre de
+  // joueurs plutôt qu'une constante unique.
+  const TIMEOUT_BASE_MS = 15_000; // "Sple Partie" + "Nbre joueurs"
+  const TIMEOUT_PAR_JOUEUR_MS = 15_000; // renommage + choix du tarif/parties
+
   function executerNouvellePartie(data) {
+    const nbJoueurs = Array.isArray(data && data.joueurs) ? data.joueurs.length : 1;
+    const timeoutMs = TIMEOUT_BASE_MS + nbJoueurs * TIMEOUT_PAR_JOUEUR_MS;
+
     return new Promise((resolve, reject) => {
       if (!botSocket) {
         reject(new Error("bot_indisponible"));
         return;
       }
-      botSocket.timeout(8000).emit("executer_nouvelle_partie", data, (err, reponseBot) => {
+      botSocket.timeout(timeoutMs).emit("executer_nouvelle_partie", data, (err, reponseBot) => {
         if (err) {
           reject(new Error("timeout_bot"));
           return;
