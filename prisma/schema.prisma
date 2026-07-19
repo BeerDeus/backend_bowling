@@ -1,0 +1,112 @@
+// Phase 2 - Structuration des données (cf. Roadmap Phase 2 / CDC 2.2)
+// Provider PostgreSQL : requis par le CDC pour l'intégrité des transactions
+// financières (contraintes relationnelles fortes). Pour le dev/test local
+// sans instance Postgres sous la main, voir backend/README.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --------------------------------------------------------------------------
+// Utilisateurs (Back-Office) - séparation des rôles (CDC section 5)
+// --------------------------------------------------------------------------
+enum RoleUtilisateur {
+  ADMIN
+  ACCUEIL
+  BAR
+}
+
+model Utilisateur {
+  id             String          @id @default(cuid())
+  email          String          @unique
+  motDePasseHash String
+  role           RoleUtilisateur
+  actif          Boolean         @default(true)
+  creeLe         DateTime        @default(now())
+  majLe          DateTime        @updatedAt
+
+  @@map("utilisateurs")
+}
+
+// --------------------------------------------------------------------------
+// Catalogue Bar
+// --------------------------------------------------------------------------
+model Categorie {
+  id       String    @id @default(cuid())
+  nom      String    @unique
+  ordre    Int       @default(0)
+  produits Produit[]
+
+  @@map("categories")
+}
+
+model Produit {
+  id             String   @id @default(cuid())
+  nom            String
+  prixCentimes   Int
+  categorieId    String
+  categorie      Categorie @relation(fields: [categorieId], references: [id])
+  actif          Boolean  @default(true)
+  // Article créé "en dur" en attendant le lien avec l'API Trivec (pas
+  // d'accès API à ce jour, cf. Roadmap Phase 2). Une fois l'intégration
+  // branchée, ces articles seront rapprochés/complétés via codeTrivec plutôt
+  // que recréés - la BDD se "remplira" en alignant sur le catalogue réel.
+  estArticleTest Boolean  @default(false)
+  codeTrivec     String?  @unique // renseigné uniquement une fois rapproché avec le vrai article Trivec
+  creeLe         DateTime @default(now())
+  majLe          DateTime @updatedAt
+
+  lignesCommande CommandeLigne[]
+
+  @@map("produits")
+}
+
+// --------------------------------------------------------------------------
+// Commandes Bar
+// --------------------------------------------------------------------------
+enum StatutCommande {
+  EN_COURS      // panier en construction côté borne, pas encore validé
+  ENVOYEE_BAR   // envoyée à Trivec (impression ticket), en attente de paiement si non payé au comptant borne
+  PAYEE         // paiement confirmé (transactionTpeId obligatoire, cf. contrainte ci-dessous)
+  ECHOUEE       // échec technique (Trivec injoignable, impression échouée...)
+  ANNULEE       // annulée (client parti sans payer, timeout, action staff)
+}
+
+model Commande {
+  id                String         @id @default(cuid())
+  statut            StatutCommande @default(EN_COURS)
+  totalCentimes     Int
+  borneId           String?
+  // Jamais de données carte brutes ici (CDC 2.3/5) : uniquement le statut/ID
+  // renvoyé par le TPE une fois la transaction traitée nativement par lui.
+  transactionTpeId  String?
+  moyenPaiement     String?        // "carte" | "especes" | "ce" | ... - libre pour l'instant, à contraindre en Phase 3
+  ticketTrivecId    String?        // identifiant renvoyé par l'adaptateur Trivec (mock ou réel)
+  erreur            String?        // dernier message d'erreur technique (Trivec injoignable, etc.)
+  creeLe            DateTime       @default(now())
+  majLe             DateTime       @updatedAt
+
+  lignes CommandeLigne[]
+
+  @@map("commandes")
+}
+
+model CommandeLigne {
+  id                   String   @id @default(cuid())
+  commandeId           String
+  commande             Commande @relation(fields: [commandeId], references: [id], onDelete: Cascade)
+  produitId            String
+  produit              Produit  @relation(fields: [produitId], references: [id])
+  quantite             Int
+  // Prix figé au moment de la commande (indépendant d'un changement de prix
+  // ultérieur du produit) - cf. CDC intégrité des transactions financières.
+  prixUnitaireCentimes Int
+  creeLe               DateTime @default(now())
+
+  @@map("commande_lignes")
+}

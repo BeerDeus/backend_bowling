@@ -1,13 +1,21 @@
 {
   "name": "bornes-backend",
-  "version": "0.1.0",
-  "description": "Phase 1 - Backend Node.js + WebSocket (PoC borne <-> bot Conqueror)",
+  "version": "0.2.0",
+  "description": "Phase 2 - Backend Node.js + WebSocket + PostgreSQL (borne <-> bot Conqueror, catalogue/commandes bar)",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
+    "@prisma/client": "^7.8.0",
     "express": "^4.19.2",
     "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "prisma": "^7.8.0"
   }
 }

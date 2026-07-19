@@ -1,11 +1,14 @@
-// Phase 1 - Serveur Node.js + WebSocket (Socket.io)
-// Rôle : relayer les commandes des bornes (tablettes) vers le bot Conqueror,
-// et renvoyer le statut du bot aux bornes. Aucune logique métier lourde ici :
-// c'est un PoC pour valider le canal temps réel (cf. Roadmap Phase 1).
+// Phase 1+2 - Serveur Node.js + WebSocket (Socket.io) + PostgreSQL (Prisma)
+// Rôle : relayer les commandes bowling des bornes vers le bot Conqueror
+// (Phase 1, inchangé), et exposer l'API REST catalogue/commandes bar
+// (Phase 2, cf. Roadmap).
 
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
+
+const catalogueRouter = require("./src/routes/catalogue");
+const commandesRouter = require("./src/routes/commandes");
 
 const app = express();
 const server = http.createServer(app);
@@ -15,7 +18,10 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3000;
 
-// État en mémoire (suffisant pour le PoC ; en Phase 2 ça part en PostgreSQL)
+app.use(express.json());
+
+// État en mémoire (suffisant pour le statut du bot Conqueror, cf. Phase 1 ;
+// les commandes bar, elles, sont en PostgreSQL depuis la Phase 2)
 let botSocket = null;
 let botLastHeartbeat = null;
 const HEARTBEAT_TIMEOUT_MS = 10_000;
@@ -27,6 +33,10 @@ app.get("/", (req, res) => {
     dernierHeartbeat: botLastHeartbeat,
   });
 });
+
+// --- Phase 2 : API REST catalogue + commandes bar ---
+app.use("/api", catalogueRouter);
+app.use("/api", commandesRouter(io));
 
 io.on("connection", (socket) => {
   console.log(`[connexion] client ${socket.id}`);
@@ -46,7 +56,7 @@ io.on("connection", (socket) => {
     io.emit("bot_status", { connecte: true });
   });
 
-  // Heartbeat périodique envoyé par le bot (cf. CDC section 2.4 - healthcheck actif)
+  // Heartbeat périodique envoyé par le bot (cf. CDC 2.4 - healthcheck actif)
   socket.on("bot_heartbeat", () => {
     if (botSocket && botSocket.id === socket.id) {
       botLastHeartbeat = Date.now();
