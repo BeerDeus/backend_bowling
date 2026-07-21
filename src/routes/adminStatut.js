@@ -24,6 +24,28 @@ module.exports = function adminStatutRouter(botRelay) {
         bdd = { joignable: false, tempsMs: Date.now() - debut, erreur: String(exc.message || exc) };
       }
 
+      // Diagnostic complémentaire (2026-07-21) : le passage au driver Neon
+      // HTTP (cf. src/db.js) n'a pas résolu le timeout - même symptôme
+      // (~5000ms) qu'avec le driver TCP direct. Deux hypothèses restent
+      // possibles : (a) Hostinger bloque TOUT sortant, pas seulement le port
+      // 5432 - un problème d'hébergement, rien à voir avec Neon ; (b) Neon
+      // bloque spécifiquement cet hôte (ex: IP Allow list activée), auquel
+      // cas un appel HTTPS quelconque vers un autre service externe
+      // passerait sans problème. Ce check isole les deux : un fetch HTTPS
+      // vers un service tiers n'ayant aucun lien avec Neon/la BDD.
+      const debutReseau = Date.now();
+      let reseauSortant;
+      try {
+        await avecDelaiMax(
+          fetch("https://api.github.com/zen", { signal: AbortSignal.timeout(4000) }),
+          4000,
+          "timeout_reseau_apres_4s"
+        );
+        reseauSortant = { joignable: true, tempsMs: Date.now() - debutReseau };
+      } catch (exc) {
+        reseauSortant = { joignable: false, tempsMs: Date.now() - debutReseau, erreur: String(exc.message || exc) };
+      }
+
       const dernierHeartbeat = botRelay.dernierHeartbeat();
       res.json({
         bot: {
@@ -31,6 +53,12 @@ module.exports = function adminStatutRouter(botRelay) {
           dernierHeartbeat: dernierHeartbeat ? new Date(dernierHeartbeat).toISOString() : null,
         },
         bdd: { ...bdd, driver: driverBdd },
+        // reseauSortant.joignable === false -> Hostinger bloque le sortant en
+        // général (à traiter côté hébergement, cf. commentaire ci-dessus) ;
+        // reseauSortant.joignable === true alors que bdd.joignable === false
+        // -> le blocage est spécifique à Neon (côté Neon à vérifier : IP
+        // Allow, projet suspendu...).
+        reseauSortant,
         serveurHeureISO: new Date().toISOString(),
       });
     })
