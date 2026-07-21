@@ -4,7 +4,10 @@
 // sans instance Postgres sous la main, voir backend/README.md.
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // Requis pour le driver adapter Neon (src/db.js) - cf. incident BDD
+  // injoignable depuis Hostinger, 2026-07-19/21.
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {

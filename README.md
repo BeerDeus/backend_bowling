@@ -52,7 +52,24 @@ sert à distinguer rapidement "la BDD ne répond pas" d'un autre problème. Touj
 Si `/api/sante` confirme que la BDD est injoignable depuis Hostinger, la solution standard
 est de passer par le driver HTTP de Neon (`@neondatabase/serverless` + `@prisma/adapter-neon`,
 qui interroge la BDD via HTTPS au lieu d'une connexion TCP brute sur 5432 - contourne ce
-genre de restriction réseau). Pas encore implémenté : à faire si le diagnostic le confirme.
+genre de restriction réseau).
+
+**Implémenté le 2026-07-21** (cf. `src/db.js`) suite à une nouvelle confirmation du
+diagnostic (`/api/admin/statut` renvoyait `bdd.joignable:false`,
+`timeout_bdd_apres_5s`, en plein incident au moment où Beer a re-cloné le projet sur
+un nouveau PC - à l'origine du "Failed to fetch" sur l'historique des commandes côté
+app-admin). Le driver n'est activé que si `DATABASE_URL` pointe vers un host
+`*.neon.tech` (sinon Prisma garde le driver `pg` standard, pour ne pas casser le dev
+local avec une Postgres Docker classique). Après ce changement :
+`npm install` puis `npx prisma generate` (nécessaire suite à l'ajout de
+`previewFeatures = ["driverAdapters"]` dans `schema.prisma`).
+
+**Important - secret exposé** : un fichier `.env` contenant une vraie `DATABASE_URL`
+(avec mot de passe Neon en clair) a été commit puis supprimé (commit "Pc Perso",
+2026-07-21) - il reste donc lisible dans l'historique git. À faire : régénérer le mot
+de passe de la BDD Neon (dashboard Neon > Reset password) et mettre à jour
+`DATABASE_URL` partout (Hostinger + `.env` local), `.env` ne devant jamais être commit
+(déjà dans `.gitignore`, mais git ne rétro-ignore pas un fichier déjà suivi).
 
 ## Mise à jour de schéma (2026-07-19) - modules commande + numérotation
 
