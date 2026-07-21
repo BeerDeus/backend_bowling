@@ -5,7 +5,7 @@
 // côté app-borne, contrairement au bot qui s'enregistre déjà via
 // botRelay/bot_register) - uniquement bot + BDD ici.
 const express = require("express");
-const { prisma } = require("../db");
+const { prisma, driverBdd } = require("../db");
 const { asyncHandler } = require("../asyncHandler");
 const { avecDelaiMax } = require("../avecDelaiMax");
 
@@ -30,7 +30,7 @@ module.exports = function adminStatutRouter(botRelay) {
           connecte: botRelay.estConnecte(),
           dernierHeartbeat: dernierHeartbeat ? new Date(dernierHeartbeat).toISOString() : null,
         },
-        bdd,
+        bdd: { ...bdd, driver: driverBdd },
         serveurHeureISO: new Date().toISOString(),
       });
     })

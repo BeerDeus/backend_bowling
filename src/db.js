@@ -42,4 +42,12 @@ if (estNeon) {
   prisma = new PrismaClient();
 }
 
-module.exports = { prisma };
+// Exposé pour diagnostic (cf. /api/admin/statut) : permet de vérifier depuis
+// l'extérieur, sans accès aux logs Hostinger, si le driver Neon HTTP est
+// bien celui réellement chargé en prod après un déploiement - au lieu de
+// deviner d'après le comportement (un timeout identique avant/après un push
+// peut aussi bien vouloir dire "le nouveau driver est actif mais bloqué
+// autrement" que "le nouveau code n'a jamais été déployé").
+const driverBdd = estNeon ? "neon-http" : "pg-standard";
+
+module.exports = { prisma, driverBdd };
