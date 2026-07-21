@@ -50,4 +50,15 @@ if (estNeon) {
 // autrement" que "le nouveau code n'a jamais été déployé").
 const driverBdd = estNeon ? "neon-http" : "pg-standard";
 
-module.exports = { prisma, driverBdd };
+// Idem, hostname extrait de DATABASE_URL - utilisé par /api/admin/statut
+// pour un fetch brut (sans Prisma/auth) vers l'hôte Neon, histoire
+// d'isoler "Hostinger ne joint pas cet hôte du tout" de "Hostinger le
+// joint mais Neon ne répond pas à la requête authentifiée".
+let hostBdd = null;
+try {
+  hostBdd = new URL(databaseUrl.replace(/^postgres(ql)?:/, "https:")).hostname || null;
+} catch (_exc) {
+  hostBdd = null;
+}
+
+module.exports = { prisma, driverBdd, hostBdd };
