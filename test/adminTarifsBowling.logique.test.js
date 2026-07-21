@@ -3,6 +3,11 @@
 // commandes.logique.test.js pour le détail du mock via Module._load).
 //
 // Lancer : node test/adminTarifsBowling.logique.test.js (depuis backend/)
+// JWT_SECRET requis avant le premier require du routeur : il importe
+// désormais exigerRole (cf. src/middlewareAuth.js -> src/auth.js) pour les
+// mutations réservées ADMIN.
+process.env.JWT_SECRET = "secret-de-test-uniquement";
+
 const assert = require("assert");
 const path = require("path");
 const Module = require("module");
@@ -35,7 +40,12 @@ async function run() {
   const findHandler = (method, p) => {
     const layer = router.stack.find((l) => l.route && l.route.path === p && l.route.methods[method]);
     if (!layer) throw new Error(`handler introuvable: ${method.toUpperCase()} ${p}`);
-    return layer.route.stack[0].handle;
+    // Dernier handler de la chaîne (pas le premier) : les mutations passent
+    // maintenant par exigerAdmin avant la logique métier (cf.
+    // src/middlewareAuth.js) - ce test couvre la logique métier isolément
+    // (comme le reste du fichier, sans BDD réelle), pas l'auth, testée à
+    // part (cf. adminAuth.logique.test.js).
+    return layer.route.stack[layer.route.stack.length - 1].handle;
   };
   const lister = findHandler("get", "/admin/bowling/tarifs");
   const creer = findHandler("post", "/admin/bowling/tarifs");

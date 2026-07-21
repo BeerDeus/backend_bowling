@@ -5,10 +5,12 @@
 // borne, écriture) : ce routeur est LECTURE SEULE, pensé pour le Back-Office
 // (app-admin/), pas pour la borne.
 //
-// Pas d'authentification pour l'instant (le modèle Utilisateur/rôles existe
-// en base - cf. schema.prisma - mais aucune route de login n'a encore été
-// développée, hors périmètre de cette itération). À ajouter avant toute
-// exposition publique de ce routeur (cf. Roadmap Phase 5 - Back-Office).
+// Authentification : exigerAuth appliqué globalement sur /api/admin/* dans
+// server.js (cf. src/middlewareAuth.js) - tout utilisateur actif connecté
+// peut lire, quel que soit son rôle (ADMIN/ACCUEIL/BAR). Pas de restriction
+// par rôle ici contrairement à adminTarifsBowling.js (mutations réservées
+// ADMIN) : la lecture seule de l'historique des commandes concerne aussi
+// l'accueil/le bar au quotidien.
 const express = require("express");
 const { prisma } = require("../db");
 const { asyncHandler } = require("../asyncHandler");

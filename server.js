@@ -21,7 +21,9 @@ const cors = require("cors");
 const { Server } = require("socket.io");
 
 const { creerBotRelay } = require("./src/botRelay");
+const { exigerAuth } = require("./src/middlewareAuth");
 const santeRouter = require("./src/routes/sante");
+const authRouter = require("./src/routes/auth");
 const catalogueRouter = require("./src/routes/catalogue");
 const commandesRouter = require("./src/routes/commandes");
 const bowlingCommandesRouter = require("./src/routes/bowlingCommandes");
@@ -62,9 +64,18 @@ app.get("/", (req, res) => {
 
 // --- API REST ---
 app.use("/api", santeRouter);
+app.use("/api", authRouter);
 app.use("/api", catalogueRouter);
 app.use("/api", commandesRouter(io));
 app.use("/api", bowlingCommandesRouter(botRelay));
+
+// Back-Office (cf. demande Beer 2026-07-21) : jusqu'ici /api/admin/* était
+// accessible sans authentification (y compris les mutations de tarifs
+// bowling) alors que le backend est public sur bowling.m2s-photo.fr.
+// exigerAuth s'applique à tout /api/admin/* AVANT les routeurs eux-mêmes -
+// la restriction par rôle plus fine (ADMIN uniquement pour les mutations de
+// tarifs) est faite dans adminTarifsBowling.js directement.
+app.use("/api/admin", exigerAuth);
 app.use("/api", adminCommandesRouter);
 app.use("/api", adminStatutRouter(botRelay));
 app.use("/api", adminTarifsBowlingRouter);

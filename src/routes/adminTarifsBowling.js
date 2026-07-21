@@ -11,8 +11,14 @@
 const express = require("express");
 const { prisma } = require("../db");
 const { asyncHandler } = require("../asyncHandler");
+const { exigerRole } = require("../middlewareAuth");
 
 const router = express.Router();
+
+// GET accessible à tout utilisateur authentifié (cf. exigerAuth global sur
+// /api/admin/* dans server.js) ; les mutations sont réservées au rôle ADMIN
+// (config tarifaire sensible - cf. demande Beer 2026-07-21).
+const exigerAdmin = exigerRole("ADMIN");
 
 const REGEX_HEURE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const JOURS_VALIDES = [0, 1, 2, 3, 4, 5, 6]; // convention JS Date.getDay() : 0=dimanche
@@ -110,6 +116,7 @@ router.get(
 
 router.post(
   "/admin/bowling/tarifs",
+  exigerAdmin,
   asyncHandler(async (req, res) => {
     const { erreurs, donnees } = validerPayload(req.body || {});
     if (erreurs.length > 0) return res.status(400).json({ erreur: "payload_invalide", details: erreurs });
@@ -121,6 +128,7 @@ router.post(
 
 router.patch(
   "/admin/bowling/tarifs/:id",
+  exigerAdmin,
   asyncHandler(async (req, res) => {
     const { erreurs, donnees } = validerPayload(req.body || {}, { partiel: true });
     if (erreurs.length > 0) return res.status(400).json({ erreur: "payload_invalide", details: erreurs });
@@ -140,6 +148,7 @@ router.patch(
 
 router.delete(
   "/admin/bowling/tarifs/:id",
+  exigerAdmin,
   asyncHandler(async (req, res) => {
     try {
       await prisma.plageTarifaireBowling.delete({ where: { id: req.params.id } });

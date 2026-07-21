@@ -11,6 +11,7 @@ function creerPrismaMock() {
   ];
   const commandes = new Map();
   const tarifsBowling = new Map();
+  const utilisateurs = new Map(); // ajoutés via _interne.utilisateurs dans les tests (cf. adminAuth.logique.test.js)
   let autoId = 1;
   let autoIdTarif = 1;
   const compteurs = {};
@@ -123,6 +124,16 @@ function creerPrismaMock() {
         return liste;
       },
     },
+    // Ajouté pour test/adminAuth.logique.test.js - findUnique par email
+    // uniquement (seul cas utilisé par src/routes/auth.js).
+    utilisateur: {
+      findUnique: async ({ where }) => {
+        if (where.email !== undefined) {
+          return Array.from(utilisateurs.values()).find((u) => u.email === where.email) || null;
+        }
+        return utilisateurs.get(where.id) || null;
+      },
+    },
     // Simule uniquement le pattern utilisé par numeroCommande.js (tagged
     // template : le premier paramètre interpolé est le module).
     $queryRaw(_strings, ...values) {
@@ -132,7 +143,7 @@ function creerPrismaMock() {
     },
   };
 
-  return { prisma, _interne: { commandes, produits, categories, compteurs } };
+  return { prisma, _interne: { commandes, produits, categories, compteurs, utilisateurs } };
 }
 
 module.exports = { creerPrismaMock };

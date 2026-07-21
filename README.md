@@ -5,12 +5,41 @@
 ```
 cd backend
 npm install
-cp .env.example .env   # remplir DATABASE_URL (voir ci-dessous)
+cp .env.example .env   # remplir DATABASE_URL (voir ci-dessous) + JWT_SECRET (voir "Auth Back-Office")
 npx prisma generate
 npx prisma migrate dev --name init   # crée les tables
-node prisma/seed.js                  # articles bar de test + utilisateur admin
+node prisma/seed.js                  # articles bar de test + utilisateur admin (affiche le mot de passe généré une fois)
 npm start
 ```
+
+## Auth Back-Office (`/api/admin/*`)
+
+Ajouté le 2026-07-21 (demande Beer) : `/api/admin/*` était jusque-là accessible sans
+authentification, y compris les mutations sur les tarifs bowling, alors que le backend
+est public sur `bowling.m2s-photo.fr`. Auth interne JWT + bcrypt (pas de service externe
+type Firebase - le modèle `Utilisateur` existe déjà en base, et une vérification JWT ne
+nécessite aucun appel réseau sortant, un vrai plus vu la fiabilité déjà discutable du
+sortant Hostinger, cf. section "Diagnostic BDD").
+
+- `POST /api/auth/login { email, motDePasse }` -> `{ token, utilisateur }`. `GET
+  /api/auth/moi` (avec `Authorization: Bearer <token>`) permet à app-admin de vérifier
+  qu'une session stockée est toujours valide.
+- `exigerAuth` (cf. `src/middlewareAuth.js`) est monté globalement sur `/api/admin/*`
+  dans `server.js` : tout utilisateur actif connecté peut lire (commandes, statut),
+  quel que soit son rôle. `exigerRole("ADMIN")` restreint en plus les mutations de
+  `adminTarifsBowling.js` (création/modif/suppression de tarifs) au rôle ADMIN.
+- `JWT_SECRET` est **obligatoire** (`src/auth.js` fait planter le serveur au démarrage
+  s'il est absent, volontairement - pas de valeur par défaut en dur dans le code source
+  public). À définir en local (`.env`) ET dans les variables d'environnement Hostinger
+  (pas automatique via `git push`). Génère une valeur avec
+  `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`.
+- Comptes créés à la main via `prisma/seed.js` (pas d'inscription en self-service) - le
+  seed régénère un mot de passe ADMIN (affiché une seule fois en console) uniquement si
+  le compte `admin@bowling.local` n'existe pas encore ou porte encore l'ancien
+  placeholder `"CHANGER_MOI"` (qui n'était PAS un hash valide - le login aurait échoué
+  pour tout le monde avec l'ancien seed).
+- Pas encore fait : self-service (reset mot de passe, création de compte depuis
+  app-admin) - comptes ACCUEIL/BAR à créer à la main en base pour l'instant.
 
 ## Base de données PostgreSQL - option d'hébergement
 

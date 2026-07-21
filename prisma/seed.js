@@ -5,6 +5,8 @@
 // on les rapprochera du vrai catalogue (renseigner codeTrivec) plutôt que de
 // les recréer.
 const { PrismaClient } = require("@prisma/client");
+const crypto = require("crypto");
+const bcrypt = require("bcryptjs");
 
 const prisma = new PrismaClient();
 
@@ -67,19 +69,32 @@ async function main() {
     }
   }
 
-  const admin = await prisma.utilisateur.upsert({
-    where: { email: "admin@bowling.local" },
-    update: {},
-    create: {
-      email: "admin@bowling.local",
-      // Placeholder - à remplacer par un vrai hash (bcrypt/argon2) avant
-      // toute mise en prod du Back-Office (Phase 5).
-      motDePasseHash: "CHANGER_MOI",
-      role: "ADMIN",
-    },
-  });
+  // Compte ADMIN par défaut - cf. demande Beer 2026-07-21 (sécuriser
+  // /api/admin/*, cf. src/routes/auth.js). Un vrai hash bcrypt cette fois
+  // (l'ancien placeholder "CHANGER_MOI" n'était PAS un hash valide -
+  // n'importe quel mot de passe aurait échoué à bcrypt.compare() contre
+  // lui, donc le login aurait été cassé pour tout le monde, pas juste
+  // "en attente d'être changé"). Ne régénère le mot de passe QUE si le
+  // compte n'existe pas encore ou porte encore ce placeholder - pas à
+  // chaque exécution du seed, sinon un mot de passe déjà choisi par Beer
+  // sauterait au prochain déploiement.
+  const existant = await prisma.utilisateur.findUnique({ where: { email: "admin@bowling.local" } });
 
-  console.log(`Seed terminé. Utilisateur admin : ${admin.email}`);
+  if (!existant || existant.motDePasseHash === "CHANGER_MOI") {
+    const motDePasseGenere = crypto.randomBytes(9).toString("base64url"); // 12 caractères, lisible
+    const motDePasseHash = await bcrypt.hash(motDePasseGenere, 10);
+
+    const admin = await prisma.utilisateur.upsert({
+      where: { email: "admin@bowling.local" },
+      update: { motDePasseHash },
+      create: { email: "admin@bowling.local", motDePasseHash, role: "ADMIN" },
+    });
+
+    console.log(`Seed terminé. Utilisateur admin : ${admin.email}`);
+    console.log(`Mot de passe généré (affiché une seule fois, à changer/noter maintenant) : ${motDePasseGenere}`);
+  } else {
+    console.log(`Seed terminé. Utilisateur admin déjà configuré (${existant.email}) - mot de passe inchangé.`);
+  }
 }
 
 main()
